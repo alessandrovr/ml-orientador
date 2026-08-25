@@ -13,7 +13,10 @@
 
 import type {
   Candidato,
+  ChaveDesempate,
+  ContextoProblema,
   CustoErro,
+  InfoDesempate,
   Objetivo,
   Prescricao,
   Prioridade,
@@ -24,6 +27,16 @@ import type {
   VolumeAmostra,
 } from './types'
 import { REFERENCIAS } from '../data/references'
+import { PERGUNTAS_FLUXO_A } from '../data/questions'
+
+interface ResultadoCandidatos {
+  candidatos: Candidato[]
+  notas: string[]
+  /** Presente só nos dois ramos em que o próprio checklist trata os dois
+   *  primeiros candidatos como equivalentes até uma informação adicional
+   *  discriminá-los — SKILL.md, Seção 2, linha 8 (Pergunta 8, opcional). */
+  chaveEmpate?: ChaveDesempate
+}
 
 type ClasseCategoria =
   | 'classificacao'
@@ -91,7 +104,7 @@ function candidatosClassificacaoOuRegressao(
   prioridade: Prioridade,
   restricao: Restricao,
   objetivoExplicativo: boolean,
-): { candidatos: Candidato[]; notas: string[] } {
+): ResultadoCandidatos {
   const isRegressao = categoria === 'regressao'
   const nomeLinear = isRegressao ? 'Regressão Linear' : 'Regressão Logística'
   const precisaInterpretar = prioridade === 'B' || restricao === 'A' || restricao === 'C' || objetivoExplicativo
@@ -192,9 +205,13 @@ function candidatosClassificacaoOuRegressao(
       ],
     }
   }
-  // Volume moderado/grande, sem exigência forte de interpretabilidade, sem restrição computacional
+  // Volume moderado/grande, sem exigência forte de interpretabilidade, sem restrição
+  // computacional: Gradient Boosting e Random Forest são o empate técnico real mais comum
+  // do checklist ("Random Forest... tende a ficar ligeiramente abaixo do boosting em
+  // desempenho puro") — candidato a Pergunta 8 (ver detectarDesempate).
   return {
     notas,
+    chaveEmpate: 'tabular-boosting',
     candidatos: [
       { nome: 'Gradient Boosting (XGBoost)', vantagem: 'Desempenho de ponta em dados tabulares na maioria dos cenários.', risco: 'Menos interpretável diretamente; exige ferramentas auxiliares (ex.: SHAP) para explicar decisões.' },
       { nome: 'Random Forest', vantagem: 'Robusto, exige menos ajuste fino de hiperparâmetros que o boosting.', risco: 'Tende a ficar ligeiramente abaixo do boosting em desempenho puro.' },
@@ -203,7 +220,7 @@ function candidatosClassificacaoOuRegressao(
   }
 }
 
-function candidatosClustering(volume: VolumeAmostra, prioridade: Prioridade, restricao: Restricao): { candidatos: Candidato[]; notas: string[] } {
+function candidatosClustering(volume: VolumeAmostra, prioridade: Prioridade, restricao: Restricao): ResultadoCandidatos {
   const notas = [
     'As perguntas do fluxo não cobrem a forma/densidade esperada dos grupos — essa é a principal premissa assumida aqui (ver Seção de refinamento).',
   ]
@@ -237,8 +254,12 @@ function candidatosClustering(volume: VolumeAmostra, prioridade: Prioridade, res
       ],
     }
   }
+  // Nenhum sinal de volume/prioridade/restrição decidiu o candidato: a forma/densidade
+  // esperada dos grupos — que as perguntas do fluxo não cobrem — é o que realmente
+  // discrimina K-means de DBSCAN/HDBSCAN aqui. Empate técnico real, candidato a Pergunta 8.
   return {
     notas,
+    chaveEmpate: 'clustering-forma',
     candidatos: [
       { nome: 'K-means', vantagem: 'Ponto de partida padrão, rápido e fácil de interpretar com seleção de k por cotovelo/silhueta.', risco: 'Assume grupos aproximadamente esféricos.' },
       { nome: 'DBSCAN/HDBSCAN', vantagem: 'Boa alternativa se os grupos tiverem formato irregular ou densidade variável.', risco: 'Mais parâmetros para calibrar.' },
@@ -301,18 +322,29 @@ function candidatosRecomendacao(volume: VolumeAmostra): { candidatos: Candidato[
   }
 }
 
-export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
-  const objetivo: Objetivo = r.pergunta1 ?? 'A'
+interface CandidatosResolvidos {
+  categoria: ClasseCategoria
+  classeTexto: string
+  candidatos: Candidato[]
+  notasExtras: string[]
+  chaveEmpate?: ChaveDesempate
+}
+
+// Centraliza a resolução de classe + candidatos, usada tanto por gerarPrescricao
+// quanto por detectarDesempate — as duas precisam enxergar exatamente os mesmos
+// candidatos para que a Pergunta 8 (quando existir) seja consistente com o
+// resultado final.
+function montarCandidatos(r: RespostasFluxoA): CandidatosResolvidos {
   const tipoDado: TipoDado = r.pergunta3 ?? 'A'
   const volume: VolumeAmostra = r.pergunta4 ?? 'B'
   const prioridade: Prioridade = r.pergunta5 ?? 'B'
-  const custoErro: CustoErro = r.pergunta6 ?? 'B'
   const restricao: Restricao = r.pergunta7 ?? 'D'
 
   const { categoria, classeTexto, objetivoExplicativo } = resolverClasse(r)
 
   let candidatos: Candidato[]
   let notasExtras: string[]
+  let chaveEmpate: ChaveDesempate | undefined
 
   switch (categoria) {
     case 'classificacao':
@@ -321,12 +353,14 @@ export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
       const res = candidatosClassificacaoOuRegressao(categoria, tipoDado, volume, prioridade, restricao, objetivoExplicativo)
       candidatos = res.candidatos
       notasExtras = res.notas
+      chaveEmpate = res.chaveEmpate
       break
     }
     case 'clustering': {
       const res = candidatosClustering(volume, prioridade, restricao)
       candidatos = res.candidatos
       notasExtras = res.notas
+      chaveEmpate = res.chaveEmpate
       break
     }
     case 'reducao': {
@@ -355,6 +389,71 @@ export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
     notasExtras.push('Restrição computacional relevante: priorize a configuração mais leve do candidato escolhido (ex.: menos componentes, k menor, amostragem).')
   }
 
+  return { categoria, classeTexto, candidatos, notasExtras, chaveEmpate }
+}
+
+const TEXTOS_DESEMPATE: Record<ChaveDesempate, (a: string, b: string) => Omit<InfoDesempate, 'chave'>> = {
+  'clustering-forma': (a, b) => ({
+    pergunta: 'Como você imagina os grupos presentes nos seus dados?',
+    opcoes: [
+      { letra: 'A', texto: `Compactos e bem separados, formato aproximadamente esférico (favorece ${a})` },
+      { letra: 'B', texto: `Irregulares, com densidade variável entre grupos (favorece ${b})` },
+      { letra: 'C', texto: 'Não sei / não tenho certeza' },
+    ],
+  }),
+  'tabular-boosting': (a, b) => ({
+    pergunta: 'Você tem tempo e disposição para fazer um ajuste fino cuidadoso de hiperparâmetros?',
+    opcoes: [
+      { letra: 'A', texto: `Sim, quero o máximo de desempenho e posso investir em tuning (favorece ${a})` },
+      { letra: 'B', texto: `Prefiro algo robusto que já funcione bem com pouco ajuste (favorece ${b})` },
+      { letra: 'C', texto: 'Não sei / prefiro decidir depois de ver os primeiros resultados' },
+    ],
+  }),
+}
+
+/** SKILL.md, Seção 3, passo 2 e Seção 2, linha 8: só depois de resolver as
+ *  perguntas 1–7 é que se verifica se restou empate técnico real entre os
+ *  dois primeiros candidatos. Retorna null quando não há empate (caso mais
+ *  comum) ou quando o aluno já respondeu a Pergunta 8. */
+export function detectarDesempate(r: RespostasFluxoA): InfoDesempate | null {
+  if (r.pergunta8) return null
+  const { candidatos, chaveEmpate } = montarCandidatos(r)
+  if (!chaveEmpate || candidatos.length < 2) return null
+  const gerarTextos = TEXTOS_DESEMPATE[chaveEmpate]
+  return { chave: chaveEmpate, ...gerarTextos(candidatos[0].nome, candidatos[1].nome) }
+}
+
+function textoOpcao(pergunta: (typeof PERGUNTAS_FLUXO_A)[number] | undefined, letra: string | undefined, outro?: string): string {
+  if (!pergunta || !letra) return 'Não informado'
+  const opcao = pergunta.opcoes.find((o) => o.letra === letra)
+  if (!opcao) return 'Não informado'
+  if (opcao.temTextoLivre && outro) return `${opcao.texto}: ${outro}`
+  return opcao.texto
+}
+
+function porId(id: string) {
+  return PERGUNTAS_FLUXO_A.find((p) => p.id === id)
+}
+
+export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
+  const objetivo: Objetivo = r.pergunta1 ?? 'A'
+  const tipoDado: TipoDado = r.pergunta3 ?? 'A'
+  const volume: VolumeAmostra = r.pergunta4 ?? 'B'
+  const prioridade: Prioridade = r.pergunta5 ?? 'B'
+  const custoErro: CustoErro = r.pergunta6 ?? 'B'
+  const restricao: Restricao = r.pergunta7 ?? 'D'
+
+  const { categoria, classeTexto, candidatos, notasExtras, chaveEmpate } = montarCandidatos(r)
+
+  // Pergunta 8 (desempate): se o empate foi detectado e o aluno respondeu, a
+  // escolha dele reordena os dois primeiros candidatos. "C"/sem resposta mantém
+  // o candidato mais conservador que já vinha em primeiro (SKILL.md, Seção 2,
+  // coluna "Se não houver resposta" da linha 8).
+  if (chaveEmpate && r.pergunta8 === 'B' && candidatos.length >= 2) {
+    ;[candidatos[0], candidatos[1]] = [candidatos[1], candidatos[0]]
+    notasExtras.push(`A resposta à pergunta de desempate favoreceu "${candidatos[0].nome}" em vez do candidato padrão.`)
+  }
+
   const principal = candidatos[0]
 
   // Custo de erro assimétrico: nunca tratar acurácia como métrica suficiente (regra explícita do checklist).
@@ -373,8 +472,16 @@ export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
   if (!r.pergunta5) premissas.push({ campo: 'Prioridade acurácia x interpretabilidade (assumido: interpretabilidade)', comoRefinar: 'Informe se prioriza acurácia, interpretabilidade ou equilíbrio entre ambas.' })
   if (!r.pergunta6) premissas.push({ campo: 'Custo assimétrico de erro (assumido: custo simétrico)', comoRefinar: 'Informe se algum tipo de erro é mais grave que o outro no seu problema.' })
   if (!r.pergunta7) premissas.push({ campo: 'Restrições práticas (assumido: nenhuma restrição relevante)', comoRefinar: 'Informe se há exigência de explicabilidade, restrição computacional ou dados sensíveis/regulamentados.' })
-  if (categoria === 'clustering') {
-    premissas.push({ campo: 'Forma/densidade esperada dos grupos', comoRefinar: 'Descreva se espera grupos bem separados e compactos, ou grupos irregulares/com densidade variável.' })
+  // Empate detectado mas sem resposta objetiva de desempate (aluno escolheu "não sei"
+  // ou a UI não chegou a perguntar): registra como refinamento possível em vez de
+  // travar a prescrição — a regra de convergência nunca bloqueia a saída.
+  if (chaveEmpate && r.pergunta8 !== 'A' && r.pergunta8 !== 'B') {
+    if (chaveEmpate === 'clustering-forma') {
+      premissas.push({ campo: 'Forma/densidade esperada dos grupos', comoRefinar: 'Descreva se espera grupos bem separados e compactos, ou grupos irregulares/com densidade variável.' })
+    }
+    if (chaveEmpate === 'tabular-boosting') {
+      premissas.push({ campo: 'Disposição para tuning cuidadoso de hiperparâmetros', comoRefinar: 'Informe se prefere investir tempo em ajuste fino (Gradient Boosting) ou algo robusto de primeira (Random Forest).' })
+    }
   }
 
   const nivelConfianca: Prescricao['nivelConfianca'] = premissas.length <= 1 ? 'alto' : premissas.length <= 3 ? 'moderado' : 'baixo'
@@ -389,10 +496,22 @@ export function gerarPrescricao(r: RespostasFluxoA): Prescricao {
       'O problema envolve dados sensíveis ou está sujeito a regulamentação (ex.: LGPD, SATEPSI/CFP). Priorize documentação da lógica de decisão e interpretabilidade, além da conformidade formal exigida pelo domínio.'
   }
 
+  // Seção "2. Contexto do problema" do relatório (SKILL.md, Seção 6A) — respostas
+  // do aluno em texto legível, não só as letras usadas internamente pelo motor.
+  const contexto: ContextoProblema = {
+    objetivo: textoOpcao(porId('pergunta1'), r.pergunta1, r.pergunta1Outro),
+    alvo: objetivo === 'D' || objetivo === 'E' ? 'Não se aplica (tarefa não supervisionada / redução de dimensionalidade)' : textoOpcao(porId('pergunta2'), r.pergunta2),
+    dadosTipoEVolume: `${textoOpcao(porId('pergunta3'), r.pergunta3)} · ${textoOpcao(porId('pergunta4'), r.pergunta4)}`,
+    prioridade: textoOpcao(porId('pergunta5'), r.pergunta5),
+    custoErro: textoOpcao(porId('pergunta6'), r.pergunta6),
+    restricoes: textoOpcao(porId('pergunta7'), r.pergunta7),
+  }
+
   return {
     algoritmoRecomendado: principal.nome,
     classeTarefa: classeTexto,
     nivelConfianca,
+    contexto,
     candidatos,
     justificativa,
     estrategiaValidacao,
@@ -440,8 +559,22 @@ function montarJustificativa(
 }
 
 function buscarReferenciaAproximada(nomeCandidato: string) {
-  // Fallback para nomes compostos (ex.: "Regressão Logística Regularizada" → busca "Regressão Logística").
+  // 1) Nomes compostos (ex.: "Regressão Logística Regularizada" → busca "Regressão Logística").
   const chaveAproximada = Object.keys(REFERENCIAS).find((chave) => nomeCandidato.includes(chave))
   if (chaveAproximada) return REFERENCIAS[chaveAproximada]
+
+  // 2) Chaves compostas por "/" na biblioteca (ex.: "Isolation Forest/One-Class SVM",
+  // "DBSCAN/HDBSCAN", "UMAP/t-SNE") cobrem um candidato que aparece sozinho em algum
+  // ramo do motor (ex.: só "Isolation Forest", ou só "HDBSCAN"). Sem este passo, esses
+  // candidatos caíam na mensagem de "referência ainda não disponível" mesmo havendo
+  // uma referência real e específica já catalogada.
+  for (const chave of Object.keys(REFERENCIAS)) {
+    if (!chave.includes('/')) continue
+    const partes = chave.split('/').map((p) => p.trim())
+    if (partes.some((parte) => nomeCandidato === parte || nomeCandidato.includes(parte))) {
+      return REFERENCIAS[chave]
+    }
+  }
+
   return []
 }

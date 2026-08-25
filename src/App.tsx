@@ -65,7 +65,7 @@ export default function App() {
 
       <footer className="mx-auto w-full max-w-3xl px-6 pb-10 pt-4">
         <p className="font-mono text-[11px] text-ink-faint">
-          ML-Orientador V1 · baseado na skill prescrição-algoritmo-ml · motor de decisão determinístico, sem IA generativa
+          ML-Orientador V2 · baseado na skill prescrição-algoritmo-ml · motor de decisão determinístico, sem IA generativa
         </p>
       </footer>
     </div>

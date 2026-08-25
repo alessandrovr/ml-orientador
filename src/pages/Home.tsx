@@ -43,7 +43,7 @@ export function Home({ onComecar, onDiagnosticar }: HomeProps) {
       </div>
 
       <div className="mt-16 flex items-center gap-6 border-t border-line pt-6 font-mono text-[11px] text-ink-faint">
-        <span>9 perguntas no máximo</span>
+        <span>até 9 perguntas</span>
         <span className="h-1 w-1 rounded-full bg-line-strong" />
         <span>Motor de decisão determinístico</span>
         <span className="h-1 w-1 rounded-full bg-line-strong" />

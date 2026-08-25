@@ -93,6 +93,20 @@ export const REFERENCIAS: Record<string, Referencia[]> = {
   'Recomendação Híbrida': [
     { autores: 'Burke, R.', ano: '2002', titulo: 'Hybrid Recommender Systems: Survey and Experiments', veiculo: 'User Modeling and User-Adapted Interaction, 12(4)' },
   ],
+  'Recomendação Baseada em Conteúdo': [
+    { autores: 'Lops, P., de Gemmis, M. & Semeraro, G.', ano: '2011', titulo: 'Content-based Recommender Systems: State of the Art and Trends', veiculo: 'Recommender Systems Handbook, Springer' },
+  ],
+  'Métodos baseados em densidade': [
+    { autores: 'Breunig, M. M., Kriegel, H.-P., Ng, R. T. & Sander, J.', ano: '2000', titulo: 'LOF: Identifying Density-Based Local Outliers', veiculo: 'Proceedings of the ACM SIGMOD International Conference on Management of Data' },
+  ],
+  'Fine-tuning de Modelo de Linguagem': [
+    { autores: 'Devlin, J., Chang, M.-W., Lee, K. & Toutanova, K.', ano: '2019', titulo: 'BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding', veiculo: 'Proceedings of NAACL-HLT' },
+    { autores: 'Howard, J. & Ruder, S.', ano: '2018', titulo: 'Universal Language Model Fine-tuning for Text Classification', veiculo: 'Proceedings of the 56th Annual Meeting of the ACL' },
+  ],
+  'Fine-tuning completo da rede': [
+    { autores: 'He, K., Zhang, X., Ren, S. & Sun, J.', ano: '2016', titulo: 'Deep Residual Learning for Image Recognition', veiculo: 'Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)' },
+    { autores: 'Yosinski, J., Clune, J., Bengio, Y. & Lipson, H.', ano: '2014', titulo: 'How Transferable Are Features in Deep Neural Networks?', veiculo: 'Advances in Neural Information Processing Systems (NeurIPS)' },
+  ],
 }
 
 // Referências para intervenções do Fluxo B (diagnóstico/otimização)

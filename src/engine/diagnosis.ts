@@ -121,6 +121,7 @@ function montarDiagnostico(entrada: MapaSintoma, r: RespostasFluxoB, chaveRefere
   return {
     sintoma: entrada.sintomaTexto,
     diagnostico: entrada.diagnostico,
+    divisaoInformada: r.perguntaB1?.trim() ? r.perguntaB1.trim() : undefined,
     intervencao: entrada.intervencao,
     porQueSeAplica: entrada.porQueSeAplica,
     referencias,

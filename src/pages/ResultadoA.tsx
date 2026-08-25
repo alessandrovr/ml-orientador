@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Prescricao } from '../engine/types'
 
 interface ResultadoAProps {
@@ -13,6 +14,20 @@ const CONFIANCA_LABEL: Record<Prescricao['nivelConfianca'], string> = {
 
 export function ResultadoA({ prescricao, onRecomecar }: ResultadoAProps) {
   const hoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+  const [baixando, setBaixando] = useState(false)
+
+  // Import dinâmico: a biblioteca de geração de .docx só entra no bundle
+  // quando o aluno de fato pede o download, mantendo o carregamento inicial
+  // do app leve (arquitetura 100% estática, sem backend).
+  async function baixarDocx() {
+    setBaixando(true)
+    try {
+      const { baixarDocxPrescricao } = await import('../utils/generateDocx')
+      await baixarDocxPrescricao(prescricao, hoje)
+    } finally {
+      setBaixando(false)
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -37,6 +52,30 @@ export function ResultadoA({ prescricao, onRecomecar }: ResultadoAProps) {
             <dd className="mt-1 text-[15px] text-ink">{CONFIANCA_LABEL[prescricao.nivelConfianca]}</dd>
           </div>
         </dl>
+      </section>
+
+      {/* 2. Contexto do problema */}
+      <section className="mt-10">
+        <h2 className="font-display text-xl font-semibold text-ink">Contexto do problema</h2>
+        <div className="mt-4 overflow-hidden rounded-xl border border-line">
+          <table className="w-full border-collapse text-left text-sm">
+            <tbody>
+              {[
+                ['Objetivo da pesquisa', prescricao.contexto.objetivo],
+                ['Variável-alvo', prescricao.contexto.alvo],
+                ['Tipo e volume dos dados', prescricao.contexto.dadosTipoEVolume],
+                ['Prioridade (acurácia x interpretabilidade)', prescricao.contexto.prioridade],
+                ['Custo de erro', prescricao.contexto.custoErro],
+                ['Restrições práticas', prescricao.contexto.restricoes],
+              ].map(([campo, valor], i, arr) => (
+                <tr key={campo} className={i !== arr.length - 1 ? 'border-b border-line' : ''}>
+                  <td className="w-2/5 px-4 py-3 font-medium text-ink align-top">{campo}</td>
+                  <td className="px-4 py-3 text-ink-soft align-top">{valor}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {prescricao.observacaoRestricaoSensivel && (
@@ -158,11 +197,11 @@ export function ResultadoA({ prescricao, onRecomecar }: ResultadoAProps) {
       <div className="mt-12 flex flex-wrap gap-3 border-t border-line pt-8">
         <button
           type="button"
-          disabled
-          title="Em breve"
-          className="cursor-not-allowed rounded-xl border border-line-strong bg-canvas-raised px-6 py-3 text-sm font-medium text-ink-faint"
+          onClick={baixarDocx}
+          disabled={baixando}
+          className="rounded-xl border border-line-strong bg-canvas-raised px-6 py-3 text-sm font-medium text-ink transition-colors hover:border-ink-soft disabled:cursor-wait disabled:opacity-60"
         >
-          Baixar relatório (.docx) — Em breve
+          {baixando ? 'Gerando .docx…' : 'Baixar relatório (.docx)'}
         </button>
         <button
           type="button"
