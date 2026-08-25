@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Diagnostico } from '../engine/types'
 
 interface ResultadoBProps {
@@ -7,6 +8,17 @@ interface ResultadoBProps {
 
 export function ResultadoB({ diagnostico, onRecomecar }: ResultadoBProps) {
   const hoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+  const [baixando, setBaixando] = useState(false)
+
+  async function baixarDocx() {
+    setBaixando(true)
+    try {
+      const { baixarDocxDiagnostico } = await import('../utils/generateDocx')
+      await baixarDocxDiagnostico(diagnostico, hoje)
+    } finally {
+      setBaixando(false)
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -23,6 +35,10 @@ export function ResultadoB({ diagnostico, onRecomecar }: ResultadoBProps) {
           <div>
             <dt className="font-mono text-[11px] text-ink-faint uppercase">Sintoma relatado</dt>
             <dd className="mt-1 text-[15px] text-ink">{diagnostico.sintoma}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[11px] text-ink-faint uppercase">Divisão treino/validação/teste informada</dt>
+            <dd className="mt-1 text-[15px] text-ink">{diagnostico.divisaoInformada ?? 'Não informado'}</dd>
           </div>
         </dl>
       </section>
@@ -103,11 +119,11 @@ export function ResultadoB({ diagnostico, onRecomecar }: ResultadoBProps) {
       <div className="mt-12 flex flex-wrap gap-3 border-t border-line pt-8">
         <button
           type="button"
-          disabled
-          title="Em breve"
-          className="cursor-not-allowed rounded-xl border border-line-strong bg-canvas-raised px-6 py-3 text-sm font-medium text-ink-faint"
+          onClick={baixarDocx}
+          disabled={baixando}
+          className="rounded-xl border border-line-strong bg-canvas-raised px-6 py-3 text-sm font-medium text-ink transition-colors hover:border-ink-soft disabled:cursor-wait disabled:opacity-60"
         >
-          Baixar relatório (.docx) — Em breve
+          {baixando ? 'Gerando .docx…' : 'Baixar relatório (.docx)'}
         </button>
         <button
           type="button"

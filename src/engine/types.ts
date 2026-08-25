@@ -19,7 +19,26 @@ export interface RespostasFluxoA {
   pergunta5?: Prioridade
   pergunta6?: CustoErro
   pergunta7?: Restricao
-  pergunta8?: string // resposta livre ao desempate, se aplicável
+  /** Resposta em letra (A/B/C) à pergunta de desempate dinâmica — SKILL.md, Seção 2, linha 8.
+   *  Só existe quando `detectarDesempate` identificou um empate técnico real. */
+  pergunta8?: 'A' | 'B' | 'C'
+}
+
+/** Chave interna que identifica qual empate técnico real foi detectado
+ *  (SKILL.md, Seção 3, passo 2). Cada chave corresponde a um ramo do motor
+ *  de decisão em que o próprio checklist trata dois candidatos como
+ *  equivalentes até uma informação adicional discriminá-los. */
+export type ChaveDesempate = 'clustering-forma' | 'tabular-boosting'
+
+export interface OpcaoDesempate {
+  letra: 'A' | 'B' | 'C'
+  texto: string
+}
+
+export interface InfoDesempate {
+  chave: ChaveDesempate
+  pergunta: string
+  opcoes: OpcaoDesempate[]
 }
 
 export type SintomaFluxoB = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'
@@ -48,10 +67,23 @@ export interface Candidato {
   risco: string
 }
 
+/** Respostas do aluno em texto legível, para a Seção "2. Contexto do
+ *  problema" do relatório (SKILL.md, Seção 6A) — antes só existia em forma
+ *  de letra (A/B/C) internamente ao motor, sem versão legível no relatório. */
+export interface ContextoProblema {
+  objetivo: string
+  alvo: string
+  dadosTipoEVolume: string
+  prioridade: string
+  custoErro: string
+  restricoes: string
+}
+
 export interface Prescricao {
   algoritmoRecomendado: string
   classeTarefa: string
   nivelConfianca: 'alto' | 'moderado' | 'baixo'
+  contexto: ContextoProblema
   candidatos: Candidato[] // primeiro item = recomendado
   justificativa: string
   estrategiaValidacao: string
@@ -70,6 +102,9 @@ export interface Referencia {
 export interface Diagnostico {
   sintoma: string
   diagnostico: string
+  /** Resposta literal do aluno à Pergunta B1 (divisão treino/validação/teste
+   *  e métricas). Ausente quando o aluno não informou. */
+  divisaoInformada?: string
   intervencao: string
   porQueSeAplica: string
   referencias: Referencia[]
